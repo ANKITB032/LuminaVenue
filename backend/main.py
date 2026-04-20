@@ -30,7 +30,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 from backend.alert_engine import AlertEngine, PHASE_SEQUENCE
 from backend.config import GAMMA_PHASES, VENUE_GRAPH_PATH
