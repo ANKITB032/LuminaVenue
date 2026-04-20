@@ -1,0 +1,7 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+python-dotenv==1.0.1
+httpx==0.27.0       # async Google API calls
+numpy==1.26.4       # density simulation (Gaussian)
+networkx==3.3        # graph construction & Dijkstra
+sse-starlette==2.1.0 # Server-Sent Events for alerts

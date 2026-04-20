@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LuminaVenue — Command Center</title>
+  <meta name="description" content="Real-time crowd management dashboard for LuminaArena stadium operations staff." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: { 400: '#22d3ee', 500: '#06b6d4', 600: '#0891b2' },
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
+            'slide-in':   'slideIn 0.4s ease-out',
+            'fade-in':    'fadeIn 0.3s ease-out',
+          },
+          keyframes: {
+            slideIn: { '0%': { transform:'translateY(-100%)', opacity:'0' }, '100%': { transform:'translateY(0)', opacity:'1' } },
+            fadeIn:  { '0%': { opacity:'0' }, '100%': { opacity:'1' } },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { background: #020617; }
+    .glass { background: rgba(15,23,42,0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.07); }
+    .badge-low      { background:#052e16; color:#4ade80; border:1px solid #166534; }
+    .badge-moderate { background:#422006; color:#fb923c; border:1px solid #7c2d12; }
+    .badge-high     { background:#431407; color:#f97316; border:1px solid #9a3412; }
+    .badge-critical { background:#450a0a; color:#f87171; border:1px solid #991b1b; }
+    .phase-active   { background: #0e7490; border-color: #22d3ee; }
+    .phase-done     { background: #052e16; border-color: #166534; opacity:0.7; }
+    .phase-future   { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1); }
+    .progress-bar   { transition: width 0.8s ease; }
+    .card-hover     { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(6,182,212,0.15); }
+    #alert-banner { transition: all 0.4s ease; }
+    .dot-blink { animation: blink 1.2s step-start infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body class="font-sans text-slate-100 min-h-screen">
+
+  <!-- ── Alert Banner ────────────────────────────────────────────── -->
+  <div id="alert-banner" class="hidden fixed top-0 left-0 right-0 z-50 animate-slide-in">
+    <div class="flex items-center justify-between px-6 py-3 bg-gradient-to-r from-cyan-900/90 to-slate-900/90 backdrop-blur border-b border-cyan-500/40">
+      <div class="flex items-center gap-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 dot-blink"></span>
+        <span class="text-xs font-semibold uppercase tracking-widest text-cyan-400">Live Alert</span>
+        <span id="alert-text" class="text-sm text-slate-100 ml-2">Connecting to event stream…</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="alert-phase-badge" class="text-xs px-2 py-0.5 rounded-full bg-cyan-800/60 text-cyan-300 border border-cyan-700">—</span>
+        <button onclick="dismissAlert()" class="text-slate-500 hover:text-slate-200 transition-colors text-lg leading-none">&times;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main Layout ─────────────────────────────────────────────── -->
+  <div class="pt-14 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="px-6 py-5 border-b border-white/5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center shadow-lg shadow-cyan-900/40">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white">LuminaVenue</h1>
+          <p class="text-xs text-slate-500">LuminaArena · Operations Dashboard</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 dot-blink"></span>
+          <span class="text-slate-400">SSE Connected</span>
+        </div>
+        <span id="header-phase" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-cyan-400 border border-cyan-900 uppercase tracking-wider">—</span>
+        <a href="map.html" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-white/10 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+          Heatmap
+        </a>
+      </div>
+    </header>
+
+    <!-- Body -->
+    <main class="flex-1 px-6 py-6 space-y-6 max-w-7xl mx-auto w-full">
+
+      <!-- Phase Control Panel -->
+      <section class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Game Phase Control</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Advance the game phase to push crowd alerts to all fans.</p>
+          </div>
+          <div id="phase-api-status" class="text-xs text-slate-600"></div>
+        </div>
+        <div id="phase-buttons" class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <!-- Rendered by JS -->
+        </div>
+      </section>
+
+      <!-- Quiet Route Finder -->
+      <section class="glass rounded-2xl p-5">
+        <h2 class="text-sm font-semibold text-white mb-4">Quiet Route Finder</h2>
+        <div class="flex flex-wrap gap-3 items-end">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-slate-500">From</label>
+            <select id="route-from" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500">
+              <option value="gate_a">Gate A — South Entry</option>
+              <option value="gate_b">Gate B — North Entry</option>
+              <option value="gate_c">Gate C — East Entry</option>
+              <option value="gate_d">Gate D — West Entry</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-slate-500">To</label>
+            <select id="route-to" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500">
+              <option value="section_100">Section 100 — Lower Bowl South</option>
+              <option value="section_200">Section 200 — Lower Bowl North</option>
+              <option value="food_court_n">Food Court North</option>
+              <option value="concession_s">Concession Stand South</option>
+              <option value="restroom_w">Restroom West</option>
+              <option value="restroom_e">Restroom East</option>
+            </select>
+          </div>
+          <button onclick="fetchRoute()" id="route-btn"
+            class="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-semibold transition-colors">
+            Find Quiet Route
+          </button>
+        </div>
+        <div id="route-result" class="mt-4 hidden animate-fade-in">
+          <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+            <span class="text-xs font-semibold text-cyan-400">Recommended Path</span>
+            <span id="route-cost" class="ml-auto text-xs text-slate-500"></span>
+          </div>
+          <div id="route-steps" class="flex flex-wrap items-center gap-1.5 text-xs"></div>
+        </div>
+        <div id="route-error" class="mt-3 hidden text-xs text-red-400"></div>
+      </section>
+
+      <!-- Queue Wait Cards -->
+      <section>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">Live Queue Status</h2>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-600" id="queue-last-updated"></span>
+            <button onclick="fetchQueue()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 transition-colors">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="queue-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Rendered by JS -->
+        </div>
+      </section>
+
+      <!-- Alert History -->
+      <section class="glass rounded-2xl p-5">
+        <h2 class="text-sm font-semibold text-white mb-3">Alert History</h2>
+        <ul id="alert-history" class="space-y-2 text-xs text-slate-400 max-h-48 overflow-y-auto pr-1">
+          <li class="text-slate-600 italic">Waiting for first alert…</li>
+        </ul>
+      </section>
+
+    </main>
+
+    <footer class="px-6 py-4 border-t border-white/5 text-center text-xs text-slate-700">
+      LuminaVenue © 2026 · Google PromptWars · LuminaArena Ops v1.0
+    </footer>
+  </div>
+
+  <!-- ── JavaScript ─────────────────────────────────────────────── -->
+  <script>
+    const API = 'http://localhost:8000';
+    const PHASES = [
+      { key: 'pre_game',      label: 'Pre-Game',    icon: '🎉' },
+      { key: 'in_play',       label: 'In Play',     icon: '⚽' },
+      { key: 'halftime',      label: 'Halftime',    icon: '⚡' },
+      { key: 'in_play_q3',   label: 'Q3 Play',     icon: '🔥' },
+      { key: 'final_whistle', label: 'Final',       icon: '🏆' },
+      { key: 'egress',        label: 'Egress',      icon: '🚗' },
+    ];
+    const PHASE_KEYS  = PHASES.map(p => p.key);
+    const NODE_LABELS = {
+      food_court_n: 'Food Court North',
+      concession_s: 'Concession South',
+      restroom_w:   'Restroom West',
+      restroom_e:   'Restroom East',
+    };
+    const NODE_ICONS = {
+      food_court_n: '🍔', concession_s: '🌮', restroom_w: '🚻', restroom_e: '🚻',
+    };
+
+    let currentPhase    = 'pre_game';
+    let alertCount      = 0;
+    let queueInterval   = null;
+
+    // ── Phase Buttons ─────────────────────────────────────────────
+    function renderPhaseButtons() {
+      const container = document.getElementById('phase-buttons');
+      container.innerHTML = '';
+      PHASES.forEach(({ key, label, icon }) => {
+        const idx     = PHASE_KEYS.indexOf(key);
+        const curIdx  = PHASE_KEYS.indexOf(currentPhase);
+        let cls = 'phase-future';
+        if (key === currentPhase) cls = 'phase-active';
+        else if (idx < curIdx)   cls = 'phase-done';
+        const disabled = idx <= curIdx;
+        container.innerHTML += `
+          <button id="pbtn-${key}" onclick="triggerPhase('${key}')"
+            ${disabled ? 'disabled' : ''}
+            class="relative flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-xs font-medium transition-all
+                   ${cls} ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-cyan-500 hover:bg-slate-800 cursor-pointer'}">
+            <span class="text-lg">${icon}</span>
+            <span class="text-slate-300 leading-tight text-center">${label}</span>
+            ${key === currentPhase ? '<span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-cyan-400 dot-blink"></span>' : ''}
+          </button>`;
+      });
+    }
+
+    async function triggerPhase(phase) {
+      const statusEl = document.getElementById('phase-api-status');
+      statusEl.textContent = 'Sending…';
+      statusEl.className   = 'text-xs text-slate-400';
+      const res  = await fetch(`${API}/api/alerts/trigger`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ phase }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        currentPhase = phase;
+        renderPhaseButtons();
+        document.getElementById('header-phase').textContent = phase.replace(/_/g,' ').toUpperCase();
+        statusEl.textContent = '✓ Phase advanced';
+        statusEl.className   = 'text-xs text-emerald-400';
+        fetchQueue();
+      } else {
+        statusEl.textContent = `✗ ${data.detail || 'Error'}`;
+        statusEl.className   = 'text-xs text-red-400';
+      }
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    }
+
+    // ── SSE Alert Stream ──────────────────────────────────────────
+    function connectSSE() {
+      const es = new EventSource(`${API}/api/alerts/stream`);
+
+      es.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        showAlertBanner(data.message, data.phase);
+        pushAlertHistory(data);
+        if (data.phase !== currentPhase) {
+          currentPhase = data.phase;
+          document.getElementById('header-phase').textContent =
+            data.phase.replace(/_/g,' ').toUpperCase();
+          renderPhaseButtons();
+        }
+      };
+
+      es.onerror = () => {
+        document.querySelector('#alert-banner .dot-blink').classList.remove('bg-cyan-400');
+        document.querySelector('#alert-banner .dot-blink').classList.add('bg-red-500');
+      };
+    }
+
+    function showAlertBanner(message, phase) {
+      const banner = document.getElementById('alert-banner');
+      document.getElementById('alert-text').textContent        = message;
+      document.getElementById('alert-phase-badge').textContent = (phase || '—').replace(/_/g,' ');
+      banner.classList.remove('hidden');
+    }
+
+    function dismissAlert() {
+      document.getElementById('alert-banner').classList.add('hidden');
+    }
+
+    function pushAlertHistory(data) {
+      alertCount++;
+      const list = document.getElementById('alert-history');
+      if (alertCount === 1) list.innerHTML = '';
+      const time = new Date().toLocaleTimeString();
+      list.insertAdjacentHTML('afterbegin', `
+        <li class="flex items-start gap-2 animate-fade-in border-b border-white/5 pb-2">
+          <span class="text-slate-600 shrink-0">${time}</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-cyan-400 shrink-0">
+            ${(data.phase || '').replace(/_/g,' ')}
+          </span>
+          <span class="text-slate-300">${data.message}</span>
+        </li>`);
+    }
+
+    // ── Queue Cards ───────────────────────────────────────────────
+    const BADGE_MAP = {
+      low:      'badge-low',
+      moderate: 'badge-moderate',
+      high:     'badge-high',
+      critical: 'badge-critical',
+    };
+
+    function barColor(level) {
+      return { low:'bg-emerald-500', moderate:'bg-orange-400', high:'bg-orange-500', critical:'bg-red-500' }[level] || 'bg-slate-600';
+    }
+
+    function maxWaitForPhase(phase) {
+      return { halftime: 900, final_whistle: 600, egress: 480, pre_game: 420 }[phase] || 180;
+    }
+
+    function renderQueueCards(summary, phase) {
+      const container = document.getElementById('queue-cards');
+      if (!summary || !summary.length) {
+        container.innerHTML = '<p class="text-xs text-slate-600 col-span-4">No queue data available.</p>';
+        return;
+      }
+      const maxWait = Math.max(...summary.map(e => e.wait_seconds), maxWaitForPhase(phase));
+      container.innerHTML = '';
+      summary.forEach(entry => {
+        const pct   = Math.min(100, Math.round((entry.wait_seconds / maxWait) * 100));
+        const badge = BADGE_MAP[entry.congestion_level] || 'badge-low';
+        const bar   = barColor(entry.congestion_level);
+        const icon  = NODE_ICONS[entry.node_id] || '⏱';
+        const label = NODE_LABELS[entry.node_id] || entry.node_id;
+        container.innerHTML += `
+          <div class="glass rounded-2xl p-5 card-hover animate-fade-in">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <p class="text-lg">${icon}</p>
+                <p class="text-sm font-semibold text-white mt-1">${label}</p>
+              </div>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge}">
+                ${entry.congestion_level.toUpperCase()}
+              </span>
+            </div>
+            <div class="mt-2">
+              <div class="flex items-end justify-between mb-1.5">
+                <span class="text-xs text-slate-500">Est. Wait</span>
+                <span class="text-2xl font-bold text-white">${entry.wait_label}</span>
+              </div>
+              <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div class="progress-bar h-1.5 rounded-full ${bar}" style="width:${pct}%"></div>
+              </div>
+            </div>
+          </div>`;
+      });
+    }
+
+    async function fetchQueue() {
+      const res = await fetch(`${API}/api/queue?phase=${currentPhase}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderQueueCards(data.summary, data.phase);
+      document.getElementById('queue-last-updated').textContent =
+        'Updated ' + new Date().toLocaleTimeString();
+    }
+
+    // ── Quiet Route ───────────────────────────────────────────────
+    async function fetchRoute() {
+      const from = document.getElementById('route-from').value;
+      const to   = document.getElementById('route-to').value;
+      const btn  = document.getElementById('route-btn');
+      const resEl  = document.getElementById('route-result');
+      const errEl  = document.getElementById('route-error');
+      resEl.classList.add('hidden');
+      errEl.classList.add('hidden');
+      btn.textContent = 'Finding…';
+      btn.disabled    = true;
+
+      const res = await fetch(`${API}/api/route?source=${from}&target=${to}&phase=${currentPhase}`);
+      btn.textContent = 'Find Quiet Route';
+      btn.disabled    = false;
+
+      if (!res.ok) {
+        const err = await res.json();
+        errEl.textContent = `✗ ${err.detail}`;
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      const data  = await res.json();
+      const route = data.route;
+
+      document.getElementById('route-cost').textContent = `Cost: ${route.total_cost.toFixed(1)}`;
+
+      const stepsEl = document.getElementById('route-steps');
+      stepsEl.innerHTML = '';
+      route.node_labels.forEach((label, i) => {
+        if (i > 0) stepsEl.innerHTML += `<span class="text-slate-600">→</span>`;
+        const d = data.density_snap[route.path[i]];
+        const lvl = d < 0.4 ? 'text-emerald-400' : d < 0.7 ? 'text-orange-400' : 'text-red-400';
+        stepsEl.innerHTML += `<span class="px-2 py-0.5 rounded bg-slate-800 ${lvl} border border-white/5">${label}</span>`;
+      });
+      resEl.classList.remove('hidden');
+    }
+
+    // ── Init ──────────────────────────────────────────────────────
+    renderPhaseButtons();
+    connectSSE();
+    fetchQueue();
+    queueInterval = setInterval(fetchQueue, 30_000);
+  </script>
+</body>
+</html>

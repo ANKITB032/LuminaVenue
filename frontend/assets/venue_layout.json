@@ -1,0 +1,139 @@
+{
+  "venue": "LuminaArena",
+  "capacity": 55000,
+  "nodes": [
+    {
+      "id": "gate_a",
+      "label": "Gate A — South Entry",
+      "type": "gate",
+      "capacity": 3000,
+      "lat": 28.6100,
+      "lng": 77.2300
+    },
+    {
+      "id": "gate_b",
+      "label": "Gate B — North Entry",
+      "type": "gate",
+      "capacity": 3000,
+      "lat": 28.6160,
+      "lng": 77.2300
+    },
+    {
+      "id": "gate_c",
+      "label": "Gate C — East Entry",
+      "type": "gate",
+      "capacity": 2500,
+      "lat": 28.6130,
+      "lng": 77.2360
+    },
+    {
+      "id": "gate_d",
+      "label": "Gate D — West Entry",
+      "type": "gate",
+      "capacity": 2500,
+      "lat": 28.6130,
+      "lng": 77.2240
+    },
+    {
+      "id": "concourse_south",
+      "label": "South Concourse",
+      "type": "concourse",
+      "capacity": 8000,
+      "lat": 28.6108,
+      "lng": 77.2300
+    },
+    {
+      "id": "concourse_north",
+      "label": "North Concourse",
+      "type": "concourse",
+      "capacity": 8000,
+      "lat": 28.6152,
+      "lng": 77.2300
+    },
+    {
+      "id": "concourse_east",
+      "label": "East Concourse",
+      "type": "concourse",
+      "capacity": 6000,
+      "lat": 28.6130,
+      "lng": 77.2348
+    },
+    {
+      "id": "concourse_west",
+      "label": "West Concourse",
+      "type": "concourse",
+      "capacity": 6000,
+      "lat": 28.6130,
+      "lng": 77.2252
+    },
+    {
+      "id": "section_100",
+      "label": "Section 100 — Lower Bowl South",
+      "type": "seating",
+      "capacity": 5000,
+      "lat": 28.6118,
+      "lng": 77.2300
+    },
+    {
+      "id": "section_200",
+      "label": "Section 200 — Lower Bowl North",
+      "type": "seating",
+      "capacity": 5000,
+      "lat": 28.6142,
+      "lng": 77.2300
+    },
+    {
+      "id": "food_court_n",
+      "label": "Food Court North",
+      "type": "amenity_food",
+      "capacity": 1200,
+      "lat": 28.6155,
+      "lng": 77.2310
+    },
+    {
+      "id": "concession_s",
+      "label": "Concession Stand South",
+      "type": "amenity_food",
+      "capacity": 800,
+      "lat": 28.6105,
+      "lng": 77.2310
+    },
+    {
+      "id": "restroom_w",
+      "label": "Restroom West",
+      "type": "amenity_restroom",
+      "capacity": 400,
+      "lat": 28.6130,
+      "lng": 77.2246
+    },
+    {
+      "id": "restroom_e",
+      "label": "Restroom East",
+      "type": "amenity_restroom",
+      "capacity": 400,
+      "lat": 28.6130,
+      "lng": 77.2354
+    }
+  ],
+  "edges": [
+    { "source": "gate_a",        "target": "concourse_south", "base_distance": 40,  "bidirectional": true },
+    { "source": "gate_b",        "target": "concourse_north", "base_distance": 40,  "bidirectional": true },
+    { "source": "gate_c",        "target": "concourse_east",  "base_distance": 35,  "bidirectional": true },
+    { "source": "gate_d",        "target": "concourse_west",  "base_distance": 35,  "bidirectional": true },
+    { "source": "concourse_south","target": "concourse_east",  "base_distance": 90,  "bidirectional": true },
+    { "source": "concourse_south","target": "concourse_west",  "base_distance": 90,  "bidirectional": true },
+    { "source": "concourse_north","target": "concourse_east",  "base_distance": 90,  "bidirectional": true },
+    { "source": "concourse_north","target": "concourse_west",  "base_distance": 90,  "bidirectional": true },
+    { "source": "concourse_south","target": "section_100",     "base_distance": 30,  "bidirectional": true },
+    { "source": "concourse_north","target": "section_200",     "base_distance": 30,  "bidirectional": true },
+    { "source": "concourse_east", "target": "section_100",     "base_distance": 60,  "bidirectional": true },
+    { "source": "concourse_east", "target": "section_200",     "base_distance": 60,  "bidirectional": true },
+    { "source": "concourse_west", "target": "section_100",     "base_distance": 60,  "bidirectional": true },
+    { "source": "concourse_west", "target": "section_200",     "base_distance": 60,  "bidirectional": true },
+    { "source": "concourse_north","target": "food_court_n",    "base_distance": 20,  "bidirectional": true },
+    { "source": "concourse_south","target": "concession_s",    "base_distance": 20,  "bidirectional": true },
+    { "source": "concourse_west", "target": "restroom_w",      "base_distance": 15,  "bidirectional": true },
+    { "source": "concourse_east", "target": "restroom_e",      "base_distance": 15,  "bidirectional": true },
+    { "source": "section_100",    "target": "section_200",     "base_distance": 120, "bidirectional": true }
+  ]
+}

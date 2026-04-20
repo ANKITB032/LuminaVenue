@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LuminaVenue — Heatmap View</title>
+  <meta name="description" content="Real-time crowd density heatmap overlay for LuminaArena venue." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'] } } },
+    };
+  </script>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; background: #020617; font-family: 'Inter', sans-serif; }
+    #map        { height: 100%; width: 100%; z-index: 0; }
+
+    /* Leaflet popup dark override */
+    .leaflet-popup-content-wrapper {
+      background: #0f172a;
+      border: 1px solid rgba(6,182,212,0.4);
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+    }
+    .leaflet-popup-tip         { background: #0f172a; }
+    .leaflet-popup-content     { margin: 10px 14px; }
+    .leaflet-container         { background: #020617; }
+    .leaflet-control-zoom a    { background: #0f172a; color: #94a3b8; border-color: rgba(255,255,255,0.1); }
+    .leaflet-control-zoom a:hover { background: #1e293b; color: #e2e8f0; }
+    .leaflet-control-attribution { background: rgba(2,6,23,0.8) !important; color: #475569 !important; font-size: 9px; }
+    .leaflet-control-attribution a { color: #64748b !important; }
+
+    .glass      { background: rgba(2,6,23,0.82); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.08); }
+    .badge-low      { background:#052e16; color:#4ade80; border:1px solid #166534; }
+    .badge-moderate { background:#422006; color:#fb923c; border:1px solid #7c2d12; }
+    .badge-high     { background:#431407; color:#f97316; border:1px solid #9a3412; }
+    .badge-critical { background:#450a0a; color:#f87171; border:1px solid #991b1b; }
+    .dot-blink { animation: blink 1.2s step-start infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    #legend-bar {
+      background: linear-gradient(to right, #1e3a5f, #0e7490, #f97316, #dc2626);
+      border-radius: 4px; height: 8px;
+    }
+  </style>
+</head>
+<body class="font-sans text-slate-100">
+
+  <!-- Map fills the viewport -->
+  <div id="map"></div>
+
+  <!-- ── Top Bar ─────────────────────────────────────────────────── -->
+  <div class="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-5 py-3 glass border-b border-white/5">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+        Dashboard
+      </a>
+      <span class="text-white/20">|</span>
+      <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center">
+        <svg class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+        </svg>
+      </div>
+      <span class="text-sm font-semibold text-white">Crowd Density Heatmap</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-500" id="last-refresh">Not loaded</span>
+      <select id="phase-select"
+        class="bg-slate-900 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500">
+        <option value="pre_game">Pre-Game</option>
+        <option value="in_play" selected>In Play</option>
+        <option value="halftime">Halftime</option>
+        <option value="in_play_q3">Q3 In Play</option>
+        <option value="final_whistle">Final Whistle</option>
+        <option value="egress">Egress</option>
+      </select>
+      <button onclick="refreshHeatmap()" id="refresh-btn"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-semibold transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Side Panel ──────────────────────────────────────────────── -->
+  <div id="panel" class="fixed top-14 right-0 z-20 w-72 h-[calc(100vh-3.5rem)] glass flex flex-col overflow-hidden border-l border-white/5">
+
+    <!-- Panel Header -->
+    <div class="px-4 py-3 border-b border-white/5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold text-white">Node Status</span>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 dot-blink"></span>
+          <span class="text-[10px] text-slate-500">Live</span>
+        </div>
+      </div>
+      <p class="text-[10px] text-slate-600 mt-0.5">Crowd density per venue node</p>
+    </div>
+
+    <!-- Phase Summary Stats -->
+    <div id="summary-stats" class="px-4 py-3 border-b border-white/5 grid grid-cols-2 gap-2">
+      <div class="bg-slate-900/60 rounded-xl p-2.5 text-center">
+        <p class="text-[10px] text-slate-500 mb-0.5">Critical</p>
+        <p id="stat-critical" class="text-lg font-bold text-red-400">—</p>
+      </div>
+      <div class="bg-slate-900/60 rounded-xl p-2.5 text-center">
+        <p class="text-[10px] text-slate-500 mb-0.5">High</p>
+        <p id="stat-high" class="text-lg font-bold text-orange-400">—</p>
+      </div>
+      <div class="bg-slate-900/60 rounded-xl p-2.5 text-center">
+        <p class="text-[10px] text-slate-500 mb-0.5">Moderate</p>
+        <p id="stat-moderate" class="text-lg font-bold text-yellow-400">—</p>
+      </div>
+      <div class="bg-slate-900/60 rounded-xl p-2.5 text-center">
+        <p class="text-[10px] text-slate-500 mb-0.5">Low / Quiet</p>
+        <p id="stat-low" class="text-lg font-bold text-emerald-400">—</p>
+      </div>
+    </div>
+
+    <!-- Node List -->
+    <div class="flex-1 overflow-y-auto px-3 py-3 space-y-1.5" id="node-list">
+      <p class="text-xs text-slate-600 text-center py-8">Loading node data…</p>
+    </div>
+
+    <!-- Density Legend -->
+    <div class="px-4 py-3 border-t border-white/5">
+      <p class="text-[10px] text-slate-500 mb-1.5">Density Legend</p>
+      <div id="legend-bar"></div>
+      <div class="flex justify-between mt-1">
+        <span class="text-[10px] text-blue-400">0% — Empty</span>
+        <span class="text-[10px] text-red-400">100% — Critical</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Leaflet JS + Heat Plugin ────────────────────────────────── -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GHiY=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+  <!-- ── JavaScript ─────────────────────────────────────────────── -->
+  <script>
+    const API        = 'http://localhost:8000';
+    let map          = null;
+    let heatLayer    = null;
+    let markers      = [];
+    let heatmapData  = [];
+    let autoRefresh  = null;
+
+    // CartoDB Dark Matter attribution
+    const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+
+    // ── initMap — Leaflet L.map ───────────────────────────────────
+    function initMap() {
+      map = L.map('map', {
+        center:         [28.6130, 77.2300],
+        zoom:           16,
+        zoomControl:    true,
+        attributionControl: true,
+      });
+
+      // CartoDB Dark Matter tile layer — maintains command-center aesthetic
+      L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        {
+          attribution: CARTO_ATTR,
+          subdomains:  'abcd',
+          maxZoom:     20,
+        }
+      ).addTo(map);
+
+      // Initialise an empty heat layer — data populated on first fetch
+      heatLayer = L.heatLayer([], {
+        radius:  30,
+        blur:    22,
+        maxZoom: 20,
+        max:     1.0,
+        gradient: {
+          0.0:  '#0e7490',
+          0.35: '#06b6d4',
+          0.60: '#f97316',
+          0.80: '#ef4444',
+          1.0:  '#dc2626',
+        },
+      }).addTo(map);
+
+      refreshHeatmap();
+      autoRefresh = setInterval(refreshHeatmap, 30_000);
+    }
+
+    // ── Density helpers ───────────────────────────────────────────
+    function densityColor(d) {
+      if (d < 0.40) return '#4ade80';
+      if (d < 0.70) return '#fb923c';
+      if (d < 0.85) return '#f97316';
+      return '#f87171';
+    }
+
+    function densityLabel(d) {
+      if (d < 0.40) return 'LOW';
+      if (d < 0.70) return 'MOD';
+      if (d < 0.85) return 'HIGH';
+      return 'CRIT';
+    }
+
+    function badgeClass(d) {
+      if (d < 0.40) return 'badge-low';
+      if (d < 0.70) return 'badge-moderate';
+      if (d < 0.85) return 'badge-high';
+      return 'badge-critical';
+    }
+
+    // ── Heatmap Data Fetch ────────────────────────────────────────
+    async function refreshHeatmap() {
+      const phase = document.getElementById('phase-select').value;
+      const btn   = document.getElementById('refresh-btn');
+      btn.textContent = 'Loading…';
+
+      const res = await fetch(`${API}/api/heatmap?phase=${phase}`);
+
+      btn.innerHTML = `
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>Refresh`;
+
+      if (!res.ok) {
+        document.getElementById('last-refresh').textContent = 'API error';
+        return;
+      }
+
+      const data  = await res.json();
+      heatmapData = data.nodes || [];
+
+      updateHeatmapLayer(heatmapData);
+      updateMarkers(heatmapData);
+      updateNodePanel(heatmapData);
+      updateStats(heatmapData);
+
+      document.getElementById('last-refresh').textContent =
+        'Updated ' + new Date().toLocaleTimeString();
+    }
+
+    // ── updateHeatmapLayer — L.heatLayer ─────────────────────────
+    function updateHeatmapLayer(nodes) {
+      if (!heatLayer) return;
+
+      // leaflet.heat expects [[lat, lng, intensity], ...]
+      const points = nodes
+        .filter(n => n.lat && n.lng)
+        .map(n => [n.lat, n.lng, Math.max(0.01, n.weight)]);
+
+      heatLayer.setLatLngs(points);
+    }
+
+    // ── updateMarkers — L.circleMarker ───────────────────────────
+    function updateMarkers(nodes) {
+      // Remove existing markers from the map
+      markers.forEach(m => m.remove());
+      markers = [];
+
+      nodes.forEach(node => {
+        if (!node.lat || !node.lng) return;
+
+        const color = densityColor(node.density);
+        const label = densityLabel(node.density);
+        const pct   = Math.round(node.density * 100);
+
+        const marker = L.circleMarker([node.lat, node.lng], {
+          radius:      10,
+          fillColor:   color,
+          fillOpacity: 0.90,
+          color:       '#020617',
+          weight:      2,
+        });
+
+        // Dark-themed popup — same data as previous InfoWindow
+        marker.bindPopup(`
+          <div style="min-width:160px;">
+            <p style="font-size:11px;font-weight:700;color:#fff;margin:0 0 4px;">${node.label}</p>
+            <p style="font-size:10px;color:#94a3b8;margin:0 0 6px;text-transform:capitalize;">
+              ${node.type.replace(/_/g,' ')}
+            </p>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:10px;color:#94a3b8;">Density</span>
+              <span style="font-size:13px;font-weight:800;color:${color};">${pct}%</span>
+            </div>
+            <div style="margin-top:6px;background:#1e293b;border-radius:4px;height:4px;overflow:hidden;">
+              <div style="width:${pct}%;background:${color};height:100%;border-radius:4px;"></div>
+            </div>
+          </div>`, {
+          maxWidth:  220,
+          className: '',
+        });
+
+        // Permanent label tooltip above each marker
+        marker.bindTooltip(label, {
+          permanent:  true,
+          direction:  'center',
+          className:  'leaflet-tooltip-none',
+          offset:     [0, 0],
+        });
+
+        marker.addTo(map);
+        markers.push(marker);
+      });
+    }
+
+    // ── panToNode — Leaflet setView ───────────────────────────────
+    function panToNode(lat, lng) {
+      if (!map) return;
+      map.setView([lat, lng], 18, { animate: true, duration: 0.6 });
+    }
+
+    // ── Side Panel — unchanged from original ─────────────────────
+    function updateNodePanel(nodes) {
+      const list = document.getElementById('node-list');
+      if (!nodes.length) {
+        list.innerHTML = '<p class="text-xs text-slate-600 text-center py-8">No data.</p>';
+        return;
+      }
+      const sorted = [...nodes].sort((a, b) => b.density - a.density);
+      list.innerHTML = sorted.map(node => {
+        const pct   = Math.round(node.density * 100);
+        const color = densityColor(node.density);
+        const badge = badgeClass(node.density);
+        return `
+          <div class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer transition-colors"
+               onclick="panToNode(${node.lat}, ${node.lng})">
+            <div class="w-2 h-2 rounded-full shrink-0" style="background:${color}"></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[11px] font-medium text-slate-200 truncate">${node.label}</p>
+              <div class="flex items-center gap-1 mt-0.5">
+                <div class="flex-1 bg-slate-800 rounded-full h-1 overflow-hidden">
+                  <div class="h-1 rounded-full"
+                    style="width:${pct}%;background:${color};transition:width 0.6s ease;"></div>
+                </div>
+                <span class="text-[10px] font-bold" style="color:${color}">${pct}%</span>
+              </div>
+            </div>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full ${badge} shrink-0">
+              ${densityLabel(node.density)}
+            </span>
+          </div>`;
+      }).join('');
+    }
+
+    function updateStats(nodes) {
+      const counts = { critical: 0, high: 0, moderate: 0, low: 0 };
+      nodes.forEach(n => {
+        if      (n.density >= 0.85) counts.critical++;
+        else if (n.density >= 0.70) counts.high++;
+        else if (n.density >= 0.40) counts.moderate++;
+        else                         counts.low++;
+      });
+      document.getElementById('stat-critical').textContent = counts.critical;
+      document.getElementById('stat-high').textContent     = counts.high;
+      document.getElementById('stat-moderate').textContent = counts.moderate;
+      document.getElementById('stat-low').textContent      = counts.low;
+    }
+
+    // Phase selector change auto-refreshes
+    document.getElementById('phase-select').addEventListener('change', refreshHeatmap);
+
+    // Boot map when DOM is ready (no async callback needed — Leaflet is sync)
+    document.addEventListener('DOMContentLoaded', initMap);
+  </script>
+
+</body>
+</html>
